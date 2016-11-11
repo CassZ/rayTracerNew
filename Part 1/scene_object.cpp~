@@ -1,0 +1,214 @@
+/***********************************************************
+ Starter code for Assignment 3
+
+ This code was originally written by Jack Wang for
+ CSC418, SPRING 2005
+
+ implements scene_object.h
+
+ ***********************************************************/
+
+#include <cmath>
+#include <iostream>
+#include "scene_object.h"
+
+bool UnitSquare::intersect(Ray3D& ray, const Matrix4x4& worldToModel,
+		const Matrix4x4& modelToWorld) {
+	// TODO: implement intersection code for UnitSquare, which is
+	// defined on the xy-plane, with vertices (0.5, 0.5, 0), 
+	// (-0.5, 0.5, 0), (-0.5, -0.5, 0), (0.5, -0.5, 0), and normal
+	// (0, 0, 1).
+	//
+	// Your goal here is to fill ray.intersection with correct values
+	// should an intersection occur.  This includes intersection.point, 
+	// intersection.normal, intersection.none, intersection.t_value.   
+	//
+	// HINT: Remember to first transform the ray into object space  
+	// to simplify the intersection test.
+
+	Ray3D ray_obj;
+	ray_obj.origin = worldToModel * ray.origin;
+	ray_obj.dir = worldToModel * ray.dir;
+
+	Vector3D normal(0, 0, 1);
+
+	// calculate the t value
+	double t = -ray_obj.origin[2] / ray_obj.dir.dot(normal);
+
+	// if t is larger than the existing t value, exit
+	if ((!ray.intersection.none && t >= ray.intersection.t_value) || t < 0) {
+		return false;
+	}
+
+	ray_obj.intersection.point = ray_obj.origin + t * ray_obj.dir;
+
+	// if the point is not in the plane, exit
+	if (ray_obj.intersection.point[0] < -0.5
+			|| ray_obj.intersection.point[0] > 0.5
+			|| ray_obj.intersection.point[1] < -0.5
+			|| ray_obj.intersection.point[1] > 0.5) {
+
+		return false;
+	}
+
+	// Convert intersection and its normal to world
+	ray.intersection.normal = transNorm(worldToModel, normal);
+	ray.intersection.normal.normalize();
+	ray.intersection.point = modelToWorld * ray_obj.intersection.point;
+	ray.intersection.t_value = t;
+	ray.intersection.none = false;
+	
+	//texture mapping
+	ray.intersection.centre = modelToWorld * Point3D(0,0,0);
+	
+
+	return true;
+}
+
+bool UnitSphere::intersect(Ray3D& ray, const Matrix4x4& worldToModel,
+		const Matrix4x4& modelToWorld) {
+	// TODO: implement intersection code for UnitSphere, which is centred 
+	// on the origin.  
+	//
+	// Your goal here is to fill ray.intersection with correct values
+	// should an intersection occur.  This includes intersection.point, 
+	// intersection.normal, intersection.none, intersection.t_value.   
+	//
+	// HINT: Remember to first transform the ray into object space  
+	// to simplify the intersection test.
+
+	Ray3D RayS;
+	RayS.origin = worldToModel * ray.origin;
+	RayS.dir = worldToModel * ray.dir;
+	Point3D sphereOrigin(0,0,0);
+
+	double radius = 1.0;
+	Vector3D origin = RayS.origin - sphereOrigin;
+
+	// calculate the t value
+	double a = RayS.dir.dot(RayS.dir);
+	double b = 2 * origin.dot(RayS.dir);
+	double c = origin.dot(origin) - 1;
+	double t, t1, t2;
+	// solve t value
+	if (b * b - 4 * a * c < 0) {
+		return false;
+	} else {
+		t1 = (-b - sqrt(b * b - 4 * a * c)) / (2 * a);
+		t2 = (-b	+ sqrt(b * b - 4 * a * c)) / (2 * a);
+	}
+	if (t1 < 0 && t2 < 0) {
+		return false;
+	} else if (t2 > 0) {
+		t = t2;
+	} else {
+		t = t1;
+	}
+
+	// if t is larger than the existing t value, exit
+	if (!ray.intersection.none && t > ray.intersection.t_value)
+		return false;
+
+
+	Vector3D normal = RayS.intersection.point - sphereOrigin;
+
+	// Convert intersection and its normal to world
+	ray.intersection.point = modelToWorld * (RayS.origin + t * RayS.dir);
+	ray.intersection.normal = modelToWorld * normal;
+	ray.intersection.normal.normalize();
+	ray.intersection.t_value = t;
+	
+	//texture mapping
+	ray.intersection.centre = modelToWorld * Point3D(0,0,0);
+	
+	ray.intersection.none = false;
+	return true;
+}
+
+bool UnitCylinder::intersect(Ray3D& ray, const Matrix4x4& worldToModel,
+		const Matrix4x4& modelToWorld) {
+	Ray3D ray_obj;
+	//Transform to the object coord
+	ray_obj.origin = worldToModel * ray.origin;
+	ray_obj.dir = worldToModel * ray.dir;
+	//The Cylinder is defined with radius equals 1, height 2
+	double radius = 1.0;
+
+	//calculate parameters for the cylinder intersects line function
+	double a = pow(ray_obj.dir[0], 2) + pow(ray_obj.dir[2], 2);
+	double b = 2* (ray_obj.origin[0] * ray_obj.dir[0]
+					+ ray_obj.origin[2] * ray_obj.dir[2]);
+	double c = pow(ray_obj.origin[0], 2) + pow(ray_obj.origin[2], 2)
+			- pow(radius, 2);
+
+	//complex root
+	if (b * b - 4 * a * c < 0) {
+		return false;
+	}
+	//Check the condition of two roots
+	double t1 = (-b - sqrt(b * b - 4 * a * c)) / (2 * a);
+	double t2 = (-b + sqrt(b * b - 4 * a * c)) / (2 * a);
+	//Check the intersection with the infinite cylinder
+	Point3D p1 = ray_obj.origin + t1 * ray_obj.dir;
+	Point3D p2 = ray_obj.origin + t2 * ray_obj.dir;
+	//check the height boundary
+	if (p1[1] > 1 || p1[1] < -1)
+		t1 = -1;
+	if (p2[1] > 1 || p2[1] < -1)
+		t2 = -1;
+	//then check for the intersection with the plane y=1
+	Vector3D normal3 = Vector3D(0, 1, 0);
+	double t3 = (Vector3D(0, 1, 0).dot(normal3) - ray_obj.origin[1])
+			/ ray_obj.dir.dot(normal3);
+	Point3D p3 = ray_obj.origin + t3 * ray_obj.dir;
+	if (pow(p3[0], 2) + pow(p3[2], 2) > 1) {
+		t3 = -1;
+	}
+	//then check for the intersection with the plane y=-1
+	Vector3D normal4 = Vector3D(0, -1, 0);
+	double t4 = (Vector3D(0, -1, 0).dot(normal4) + ray_obj.origin[1])
+			/ ray_obj.dir.dot(normal4);
+	Point3D p4 = ray_obj.origin + t4 * ray_obj.dir;
+	if (pow(p4[0], 2) + pow(p4[2], 2) > 1) {
+		t4 = -1;
+	}
+	//Find the smallest non-nagtive t value
+	double min = t1;
+	if (min < 0 || (t2 < min && t2 > 0)) {
+		min = t2;
+	}
+	if (min < 0 || (t3 < min && t3 > 0)) {
+		min = t3;
+	}
+	if (min < 0 || (t4 < min && t4 > 0)) {
+		min = t4;
+	}
+
+	if (min < 0)
+		return false;
+	//check if the ray already has a intersection with smaller t value
+	if (!ray.intersection.none && min > ray.intersection.t_value) {
+		return false;
+	}
+
+	ray_obj.intersection.point = ray_obj.origin + min * ray_obj.dir;
+	//assign the corresponding normal based on the t
+	Vector3D normal;
+	if (min == t3)
+		normal = normal3;
+	else if (min == t4)
+		normal = normal4;
+	else
+		normal = ray_obj.intersection.point	- Point3D(0, ray_obj.intersection.point[1], 0);
+
+	
+	ray.intersection.normal = transNorm(worldToModel, normal);
+	ray.intersection.normal.normalize();
+	ray.intersection.point = modelToWorld * ray_obj.intersection.point;
+	ray.intersection.t_value = min;
+	ray.intersection.none = false;
+	//texture mapping
+	ray.intersection.centre = modelToWorld * Point3D(0,0,0);
+	return true;
+}
+
